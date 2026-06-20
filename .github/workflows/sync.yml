@@ -1,9 +1,13 @@
-name: Sync archive daily
+name: Sync archive weekly
 
 on:
-  # Esecuzione schedulata: ogni giorno alle 07:00 UTC (~09:00 Roma in estate, 08:00 in inverno)
+  # Esecuzione schedulata: ogni DOMENICA alle 04:00 UTC
+  # (= 05:00 Roma inverno / 06:00 Roma estate)
+  # Quota Twelve Data appena resettato (reset a mezzanotte UTC)
+  # Cron format: minute hour day-of-month month day-of-week
+  # day-of-week: 0=Sunday, 1=Mon, ..., 6=Saturday
   schedule:
-    - cron: '0 7 * * *'
+    - cron: '0 4 * * 0'
   # Permette anche di lanciarlo a mano dal tab Actions
   workflow_dispatch:
 
@@ -14,7 +18,7 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -47,6 +51,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "Nessun cambiamento — skip commit"
           else
-            git commit -m "Auto sync archive · $(date -u +%Y-%m-%d)"
+            git commit -m "Auto sync archive · $(date -u +%Y-%m-%d) (weekly Sunday)"
             git push
           fi
