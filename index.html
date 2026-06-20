@@ -3235,34 +3235,43 @@ function screenerRender(){
 }
 
 async function screenerLoadInPac(ticker){
-  // Find ticker in archive, load its data into state.series, trigger backtest
-  const rec = await dbGetSeries(ticker);
-  if (!rec || !rec.bars || !rec.bars.length){
-    toast(`Ticker ${ticker} non trovato in archivio.`, 4000);
-    return;
+  // Find ticker in cloud archive, load its data into state.series, trigger backtest
+  try {
+    showLoading('CARICAMENTO BARS…', ticker);
+    const bars = await loadBarsForTicker(ticker);
+    hideLoading();
+    if (!bars || !bars.length){
+      toast(`Ticker ${ticker} non trovato in archivio cloud.`, 4000);
+      return;
+    }
+    // Find name from screener results
+    const screenerRec = (screenerState.results || []).find(r => r.ticker === ticker);
+    const name = screenerRec ? screenerRec.name : ticker;
+    const asset = {
+      stooq: ticker.toLowerCase() + '.us',
+      display: ticker,
+      name: name,
+      color: '#FFC857',
+    };
+    state.asset = asset;
+    state.series = bars;
+    state.dataSource = 'Cloud archive';
+    setAssetColor(asset.color);
+    hideFetchError();
+    updateTickerStrip();
+    $('runStatus').textContent = `${asset.display} caricato · ${bars.length} sedute · backtest in esecuzione…`;
+    $('runBtn').disabled = false;
+    // Scroll to top so user sees PAC
+    window.scrollTo({ top:0, behavior:'smooth' });
+    // Trigger backtest with current parameters by simulating click
+    setTimeout(() => {
+      try { $('runBtn').click(); }
+      catch(e){ toast('Errore backtest: '+e.message, 4000); }
+    }, 400);
+  } catch(e){
+    hideLoading();
+    toast('Errore caricamento ticker: ' + e.message, 6000);
   }
-  // Build asset object compatible with state.asset
-  const asset = {
-    stooq: ticker.toLowerCase() + '.us',
-    display: ticker,
-    name: rec.name || ticker,
-    color: '#FFC857',
-  };
-  state.asset = asset;
-  state.series = rec.bars;
-  state.dataSource = 'Archivio locale';
-  setAssetColor(asset.color);
-  hideFetchError();
-  updateTickerStrip();
-  $('runStatus').textContent = `${asset.display} caricato dall'archivio · ${rec.bars.length} sedute · backtest in esecuzione…`;
-  $('runBtn').disabled = false;
-  // Scroll to top so user sees PAC
-  window.scrollTo({ top:0, behavior:'smooth' });
-  // Trigger backtest with current parameters by simulating click
-  setTimeout(() => {
-    try { $('runBtn').click(); }
-    catch(e){ toast('Errore backtest: '+e.message, 4000); }
-  }, 400);
 }
 
 function screenerExportCSV(){
@@ -3291,6 +3300,47 @@ function screenerExportCSV(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast(`CSV esportato · ${screenerState.filtered.length} righe`, 3000);
+}
+
+function renderTopCompounder(){
+  const wrap = $('topScoreSection');
+  const grid = $('topScoreGrid');
+  if (!wrap || !grid) return;
+  if (!screenerState.results || !screenerState.results.length){
+    wrap.style.display = 'none';
+    return;
+  }
+  const scoreKey = activeScoreKey();
+  const scoreLabel = activeScoreLabel().toLowerCase();
+  const top = [...screenerState.results]
+    .filter(r => r[scoreKey] != null)
+    .sort((a,b) => b[scoreKey] - a[scoreKey])
+    .slice(0, 14);
+  if (!top.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if ($('topScoreMeta')) $('topScoreMeta').textContent = `top 14 per ${scoreLabel}`;
+  grid.innerHTML = top.map(r => `
+    <div class="recommended-card" data-rec-tk="${r.ticker}">
+      <div class="rec-card-top">
+        <span class="rec-card-ticker">${r.ticker}</span>
+        <span class="rec-card-delta">${r[scoreKey].toFixed(1)}</span>
+      </div>
+      <div class="rec-card-name">${r.name}</div>
+      <div class="rec-card-stats">
+        <span class="stat-pos">CAGR ${(r.cagr*100).toFixed(1)}%</span>
+        <span>R² ${r.r2.toFixed(2)}</span>
+      </div>
+    </div>
+  `).join('');
+  grid.querySelectorAll('.recommended-card').forEach(c => {
+    c.addEventListener('click', () => screenerLoadInPac(c.dataset.recTk));
+  });
+}
+
+// renderRecommended (Alpha Smart) requires batch results — not present in cloud version
+function renderRecommended(){
+  const wrap = $('recommendedSection');
+  if (wrap) wrap.style.display = 'none';  // hide if exists, otherwise no-op
 }
 
 function bindScreenerUI(){
