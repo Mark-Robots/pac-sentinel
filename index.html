@@ -137,6 +137,69 @@
   .data-status-icon{font-size:14px}
   .data-status-text{display:inline-flex;align-items:center;gap:6px}
 
+  /* MONTE CARLO PICK FINALE */
+  .mc-section{
+    border:1px solid var(--line-strong);
+    border-left:3px solid var(--smart);
+    border-radius:3px;
+    background:linear-gradient(135deg, color-mix(in srgb, var(--smart) 4%, transparent) 0%, transparent 100%);
+    padding:18px 22px;margin-bottom:18px;
+  }
+  .mc-header{
+    display:flex;align-items:center;gap:12px;margin-bottom:14px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:0.18em;text-transform:uppercase;
+  }
+  .mc-icon{font-size:18px}
+  .mc-title{color:var(--smart);font-weight:600;letter-spacing:0.2em}
+  .mc-meta{margin-left:auto;color:var(--text-mute);font-size:9.5px;letter-spacing:0.1em}
+  .mc-explain{
+    background:var(--bg-1);border:1px solid var(--line);border-radius:3px;
+    padding:12px 16px;margin-bottom:14px;
+    font-family:'IBM Plex Sans',sans-serif;font-size:11px;line-height:1.55;
+    color:var(--text-dim);
+  }
+  .mc-explain strong{color:var(--text)}
+  .mc-controls{
+    display:flex;align-items:center;gap:8px;margin-bottom:14px;
+    flex-wrap:wrap;padding:10px 12px;background:var(--bg-1);border-radius:3px;
+  }
+  .mc-mode-label{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    letter-spacing:0.18em;text-transform:uppercase;color:var(--text-mute);
+  }
+  .mc-controls .pill-btn{font-size:10px;padding:6px 11px}
+  .mc-controls .pill-btn.active{
+    background:color-mix(in srgb, var(--smart) 15%, transparent);
+    border-color:var(--smart);color:var(--smart);
+  }
+  .mc-table-wrap{
+    background:var(--bg-0);border:1px solid var(--line);border-radius:3px;overflow:auto;
+  }
+  .mc-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px}
+  .mc-table thead th{
+    background:var(--bg-1);padding:9px 12px;text-align:left;
+    font-size:9.5px;letter-spacing:0.15em;text-transform:uppercase;
+    color:var(--text-mute);font-weight:500;
+    border-bottom:1px solid var(--line-strong);
+  }
+  .mc-table th.num{text-align:right}
+  .mc-table tbody tr{
+    cursor:pointer;border-bottom:1px solid color-mix(in srgb, var(--line) 50%, transparent);
+    transition:background 0.12s;
+  }
+  .mc-table tbody tr:hover{background:var(--bg-1)}
+  .mc-table tbody td{padding:8px 12px}
+  .mc-table tbody td.num{text-align:right}
+  .mc-table tbody td.ticker-cell{font-weight:600;color:var(--text)}
+  .mc-table tbody td.pos{color:var(--smart)}
+  .mc-table tbody td.neg{color:var(--fear)}
+  .mc-table tbody td.dim{color:var(--text-mute)}
+  .mc-rank-1, .mc-rank-2, .mc-rank-3{font-weight:700}
+  .mc-rank-1 .num.consistency{color:#ffd700}
+  .mc-rank-2 .num.consistency{color:#c0c0c0}
+  .mc-rank-3 .num.consistency{color:#cd7f32}
+
   /* SITE FOOTER */
   .site-footer{
     margin-top:48px;padding:24px 0;
@@ -971,6 +1034,48 @@
       <span class="rec-meta" id="topScoreMeta"></span>
     </div>
     <div class="recommended-grid" id="topScoreGrid"></div>
+  </div>
+
+  <!-- 🎲 MONTE CARLO PICK FINALE -->
+  <div class="mc-section" id="mcSection" style="display:none">
+    <div class="mc-header">
+      <span class="mc-icon">🎲</span>
+      <span class="mc-title">PICK FINALE · MONTE CARLO ROLLING</span>
+      <span class="mc-meta" id="mcMeta">— ticker testati su 32 finestre da 5 anni</span>
+    </div>
+
+    <div class="mc-explain">
+      <strong>Come funziona.</strong> Per ogni ticker il sistema esegue un PAC SMART su ~32 finestre rolling di 5 anni (avanzando ogni 3 mesi nel passato). Calcola statistiche sulle 32 simulazioni e ordina per <strong>Consistency Score</strong> — un mix di rendimento mediano e stabilità. Vince chi ha generato rendimenti più alti <em>e</em> più prevedibili nel tempo, non chi ha avuto un anno fortunato.
+    </div>
+
+    <div class="mc-controls">
+      <span class="mc-mode-label">ORDINA PER:</span>
+      <button class="pill-btn active" id="mcSortConsistency">⭐ CONSISTENCY</button>
+      <button class="pill-btn" id="mcSortMedian">📊 RENDIMENTO MEDIANO</button>
+      <button class="pill-btn" id="mcSortWinrate">🏆 WIN-RATE vs CLASSICO</button>
+      <button class="pill-btn" id="mcSortWorst">🛡 WORST CASE</button>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-mute);margin-left:auto" id="mcSortHint">Consistency = mediana penalizzata dalla volatilità</span>
+    </div>
+
+    <div class="mc-table-wrap">
+      <table class="mc-table" id="mcTable">
+        <thead>
+          <tr>
+            <th style="width:38px">#</th>
+            <th>Ticker</th>
+            <th>Nome</th>
+            <th>Settore</th>
+            <th class="num">N. fin.</th>
+            <th class="num" data-mc-col="smart_median">SMART mediana</th>
+            <th class="num" data-mc-col="smart_worst5">Worst 5%</th>
+            <th class="num" data-mc-col="smart_best5">Best 5%</th>
+            <th class="num" data-mc-col="win_rate_vs_classico">Win vs Classico</th>
+            <th class="num" data-mc-col="consistency">Consistency</th>
+          </tr>
+        </thead>
+        <tbody id="mcTbody"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- ASSET TABS removed - replaced by recommended sections above -->
@@ -2287,6 +2392,7 @@ function bindEvents(){
 
   // bind screener UI
   bindScreenerUI();
+  bindMcUI();
 
   // === CLOUD DATA LOAD ===
   // Load snapshot.json (pre-calculated screener + scores) from the same origin.
@@ -3419,6 +3525,108 @@ const cloudState = {
   archiveLoadingPromise: null,
 };
 
+/* =========================================================================
+   MONTE CARLO PICK FINALE — render & sort
+   ========================================================================= */
+const mcState = {
+  results: [],          // ticker con r.mc != null
+  sortKey: 'consistency',
+  sortDir: 'desc',
+  topN: 20,
+};
+
+const MC_SORT_HINTS = {
+  consistency: 'Consistency = mediana penalizzata dalla volatilità (mix di alto rendimento e prevedibilità)',
+  smart_median: 'Rendimento mediano del PAC SMART sulle ~32 finestre di 5 anni',
+  win_rate_vs_classico: '% finestre in cui SMART batte CLASSICO — alta = strategia robusta',
+  smart_worst5: 'Worst case (5° percentile): quanto avresti perso nello scenario peggiore',
+};
+
+function renderMcTable(){
+  const tbody = $('mcTbody');
+  const meta = $('mcMeta');
+  if (!tbody) return;
+  if (!mcState.results.length){
+    $('mcSection').style.display = 'none';
+    return;
+  }
+  $('mcSection').style.display = 'block';
+
+  // Sort
+  const k = mcState.sortKey;
+  const sorted = [...mcState.results].sort((a, b) => {
+    const av = a.mc?.[k];
+    const bv = b.mc?.[k];
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return mcState.sortDir === 'desc' ? bv - av : av - bv;
+  });
+  const top = sorted.slice(0, mcState.topN);
+
+  // Meta
+  if (meta){
+    const n = mcState.results.length;
+    const avgWindows = mcState.results.reduce((s, r) => s + (r.mc?.n_windows || 0), 0) / n;
+    meta.textContent = `${n} ticker testati · media ${avgWindows.toFixed(0)} finestre per ticker · top ${mcState.topN}`;
+  }
+
+  const fmtPct = (v) => v == null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const fmtNum = (v, d=2) => v == null ? '—' : v.toFixed(d);
+  const cls = (v) => v == null ? 'dim' : (v >= 0 ? 'pos' : 'neg');
+
+  tbody.innerHTML = top.map((r, i) => {
+    const mc = r.mc;
+    const rankClass = i < 3 ? `mc-rank-${i+1}` : '';
+    return `
+      <tr class="${rankClass}" data-mc-tk="${r.ticker}">
+        <td class="num">${i+1}</td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${r.name}</td>
+        <td class="dim">${r.sector || '—'}</td>
+        <td class="num dim">${mc.n_windows}</td>
+        <td class="num ${cls(mc.smart_median)}">${fmtPct(mc.smart_median)}</td>
+        <td class="num ${cls(mc.smart_worst5)}">${fmtPct(mc.smart_worst5)}</td>
+        <td class="num ${cls(mc.smart_best5)}">${fmtPct(mc.smart_best5)}</td>
+        <td class="num ${mc.win_rate_vs_classico >= 70 ? 'pos' : (mc.win_rate_vs_classico < 50 ? 'neg' : 'dim')}">${fmtNum(mc.win_rate_vs_classico, 0)}%</td>
+        <td class="num consistency">${fmtNum(mc.consistency, 1)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Click row → load in PAC
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const tk = tr.dataset.mcTk;
+      if (tk) screenerLoadInPac(tk);
+    });
+  });
+}
+
+function bindMcUI(){
+  const buttons = {
+    'mcSortConsistency': 'consistency',
+    'mcSortMedian': 'smart_median',
+    'mcSortWinrate': 'win_rate_vs_classico',
+    'mcSortWorst': 'smart_worst5',
+  };
+  Object.entries(buttons).forEach(([btnId, key]) => {
+    const btn = $(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      mcState.sortKey = key;
+      // worst is "best when less negative" → ASC sort
+      mcState.sortDir = (key === 'smart_worst5') ? 'desc' : 'desc';  // worst5: -10 > -50, quindi DESC è giusto
+      // Update active buttons
+      Object.keys(buttons).forEach(id => {
+        $(id)?.classList.toggle('active', id === btnId);
+      });
+      // Update hint
+      if ($('mcSortHint')) $('mcSortHint').textContent = MC_SORT_HINTS[key] || '';
+      renderMcTable();
+    });
+  });
+}
+
 async function loadCloudSnapshot(){
   // Load snapshot.json from same origin (works on GitHub Pages and any static host)
   const url = './snapshot.json';
@@ -3441,6 +3649,12 @@ async function loadCloudSnapshot(){
   $('screenerStatsInline').textContent = `${screenerState.results.length} ranked`;
   screenerApplyFilters();
   renderTopCompounder();
+
+  // Render Monte Carlo PICK FINALE table (if present in snapshot)
+  if (Array.isArray(data.topMcConsistency) && data.topMcConsistency.length){
+    mcState.results = data.screener.filter(r => r.mc);  // tutti con MC computati
+    renderMcTable();
+  }
 
   console.log('Cloud snapshot loaded:', screenerState.results.length, 'tickers');
 }
