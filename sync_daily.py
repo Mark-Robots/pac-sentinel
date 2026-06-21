@@ -169,12 +169,20 @@ def history_start_str():
 def fetch_twelve_data(symbol, start_date, api_key):
     """
     Chiama Twelve Data /time_series e ritorna lista di bars {date, o, h, l, c, v}.
-    Solleva eccezione su errore.
+
+    Returns:
+        list[dict]: barre giornaliere (anche [] se range vuoto, weekend, festività)
+
+    Raises:
+        RuntimeError: solo per errori veri (rate limit, simbolo non trovato, network).
+        Gli HTTP 400 con "no data" sono trattati come empty result (non errore).
     """
     today = today_str()
+    # Twelve Data uses dots not dashes for share classes (BRK.B not BRK-B)
+    td_symbol = symbol.replace('-', '.')
     url = (
         'https://api.twelvedata.com/time_series'
-        f'?symbol={symbol}'
+        f'?symbol={td_symbol}'
         f'&interval=1day'
         f'&start_date={start_date}'
         f'&end_date={today}'
@@ -185,19 +193,42 @@ def fetch_twelve_data(symbol, start_date, api_key):
     try:
         with urllib.request.urlopen(url, timeout=30) as resp:
             raw = resp.read().decode('utf-8')
+    except urllib.error.HTTPError as e:
+        # HTTP 400 often means "no data in range" (weekend, future date) — not a real error
+        if e.code == 400:
+            try:
+                err_body = e.read().decode('utf-8')
+                err_data = json.loads(err_body)
+                err_msg = (err_data.get('message') or '').lower()
+                if any(s in err_msg for s in ['no data', 'no trading days', 'invalid date', 'start_date', 'end_date']):
+                    return []  # empty range, not an error
+                # Other 400: re-raise with context
+                raise RuntimeError(f'TD HTTP 400: {err_msg[:120]}')
+            except (json.JSONDecodeError, AttributeError):
+                # 400 without parsable body → assume no data
+                return []
+        elif e.code == 404:
+            raise RuntimeError(f'Symbol {td_symbol} not found (HTTP 404)')
+        elif e.code == 429:
+            raise RuntimeError('TD rate limit raggiunto (HTTP 429)')
+        else:
+            raise RuntimeError(f'HTTP error {e.code}: {e}')
     except urllib.error.URLError as e:
         raise RuntimeError(f'Network error: {e}')
 
     data = json.loads(raw)
     if data.get('status') == 'error' or data.get('code'):
-        msg = data.get('message') or data.get('code') or 'unknown error'
-        if any(s in msg.lower() for s in ['rate limit', 'exceeded', 'limit reached']):
+        msg = data.get('message') or str(data.get('code', 'unknown error'))
+        msg_low = msg.lower()
+        if any(s in msg_low for s in ['rate limit', 'exceeded', 'limit reached', 'run out']):
             raise RuntimeError('TD rate limit raggiunto')
-        raise RuntimeError(f'TD error: {msg[:100]}')
+        if any(s in msg_low for s in ['no data', 'no trading days', 'invalid date', 'out of range']):
+            return []  # empty range, not an error
+        raise RuntimeError(f'TD error: {msg[:120]}')
 
     values = data.get('values', [])
     if not isinstance(values, list):
-        raise RuntimeError('TD: response without values array')
+        return []  # malformed response, treat as no data
 
     # TD returns DESC dates → flip to ASC
     bars = []
@@ -282,10 +313,11 @@ def main():
         # Calcola da quale data partire
         if existing and existing.get('lastDate'):
             start_date = add_days(existing['lastDate'], 1)
-            if start_date > today_str():
+            # Skip se start_date è oggi o nel futuro (weekend, festività, già aggiornato)
+            if start_date >= today_str():
                 skipped += 1
                 if i % 50 == 0:
-                    log(f'[{i+1}/{len(UNIVERSE)}] {ticker}: già aggiornato')
+                    log(f'[{i+1}/{len(UNIVERSE)}] {ticker}: già aggiornato (lastDate={existing["lastDate"]})')
                 continue
         else:
             start_date = history_start_str()
